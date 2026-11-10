@@ -64,8 +64,7 @@ def http_get(url: str, timeout: int = TIMEOUT, **kw):
 def clean_title(raw: str, url: str) -> str:
     t = html.unescape(re.sub(r"<[^>]+>", "", raw or "")).strip()
     if not t:
-        t = unquote(Path(urlparse(url).path).stem)
-    t = re.sub(r"[-_]+", " ", t)
+        t = re.sub(r"[-_]+", " ", unquote(Path(urlparse(url).path).stem))
     t = re.sub(r"\s+", " ", t).strip()
     return t
 
@@ -271,15 +270,78 @@ def scrape_site(base: str, jur: str, cfg: dict, cutoff: date) -> tuple[str, list
     return label, out
 
 
-def scrape_html_page(page: dict, cfg: dict) -> list[dict]:
-    """Páginas oficiales (p. ej. CABA): sigue el enlace 'Cobertura de cátedras' y junta PDFs."""
+ACTUALIZADO_RX = re.compile(r"actualiza\w*\s*:?\s*(\d{1,2})/(\d{1,2})/(\d{2,4})", re.I)
+
+
+def _iso(d: str, m: str, y: str) -> str | None:
+    year = int(y) + (2000 if len(y) == 2 else 0)
+    try:
+        return date(year, int(m), int(d)).isoformat()
+    except ValueError:
+        return None
+
+
+def scrape_institute_page(url: str, inst: str, jur: str, cutoff: date) -> list[dict]:
+    """Página de un instituto en buenosaires.gob.ar: PDFs agrupados bajo 'Actualizado: DD/MM/AAAA'."""
+    r = http_get(url)
+    if r is None:
+        return []
+    soup = BeautifulSoup(r.text, "html.parser")
+    current: str | None = None
+    out, seen = [], set()
+    for el in soup.find_all(["strong", "b", "h2", "h3", "h4", "p", "span", "a"]):
+        if el.name == "a":
+            u = urljoin(r.url, el.get("href", ""))
+            if not u.lower().split("?")[0].endswith(".pdf") or u in seen:
+                continue
+            fecha = current or date_from_url(u)
+            if fecha is None or fecha < cutoff.isoformat():
+                continue
+            seen.add(u)
+            out.append({"url": u, "titulo": clean_title(el.get_text(" ", strip=True), u),
+                        "instituto": inst, "jurisdiccion": jur, "fecha": fecha, "sitio": url})
+        else:
+            txt = el.get_text(" ", strip=True)
+            if len(txt) < 60 and not el.find("a"):
+                m = ACTUALIZADO_RX.search(txt)
+                if m:
+                    current = _iso(*m.groups()) or current
+    return out
+
+
+def scrape_html_page(page: dict, cfg: dict, cutoff: date) -> list[dict]:
+    """Páginas oficiales de CABA. Dos modos:
+    - indice_institutos: el índice enlaza a una página por instituto (todos sus PDFs son llamados).
+    - seguir_enlace_con_texto: sigue un enlace y junta los PDFs que parecen convocatorias."""
     r = http_get(page["url"])
     if r is None:
         return []
+    soup = BeautifulSoup(r.text, "html.parser")
+    if page.get("indice_institutos"):
+        base_path = urlparse(r.url).path.rstrip("/")
+        targets: dict[str, tuple[str, str]] = {}
+        for a in soup.find_all("a", href=True):
+            u = urljoin(r.url, a["href"]).split("#")[0].rstrip("/")
+            pu = urlparse(u)
+            if pu.netloc != urlparse(r.url).netloc or "cobertura-de-catedras/" not in pu.path:
+                continue
+            if pu.path.rstrip("/") == base_path:
+                continue
+            slug = pu.path.rsplit("/", 1)[-1]
+            name = re.sub(r"\s+", " ", html.unescape(a.get_text(" ", strip=True)))
+            if name and (slug not in targets or "/educacion/estudiantes/" in pu.path):
+                targets[slug] = (u, name)
+        out: list[dict] = []
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for items in ex.map(lambda t: scrape_institute_page(t[0], t[1], page["jurisdiccion"], cutoff),
+                                targets.values()):
+                out += items
+        return out
+
     target = r
     want = norm(page.get("seguir_enlace_con_texto", ""))
     if want:
-        for a in BeautifulSoup(r.text, "html.parser").find_all("a", href=True):
+        for a in soup.find_all("a", href=True):
             if want in norm(a.get_text(" ")):
                 nxt = http_get(urljoin(r.url, a["href"]))
                 if nxt is not None:
@@ -334,7 +396,7 @@ def run(force: bool) -> int:
             if res is not None:
                 alive += 1
                 found += res[1]
-        for page_items in ex.map(lambda p: scrape_html_page(p, cfg), cfg.get("paginas_html", [])):
+        for page_items in ex.map(lambda p: scrape_html_page(p, cfg, cutoff), cfg.get("paginas_html", [])):
             found += page_items
 
     print(f"Sitios que respondieron: {alive}/{len(sites)} · PDFs candidatos: {len(found)}")

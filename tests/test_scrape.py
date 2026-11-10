@@ -47,6 +47,37 @@ class Parsing(unittest.TestCase):
             "https://isfd55-bue.infd.edu.ar/sitio/wp-content/uploads/2026/08/Conv.pdf"), "2026-08-01")
 
 
+class CabaIndex(unittest.TestCase):
+    def test_indice_e_instituto(self):
+        index = ('<a href="/educacion/estudiantes/formacion-docente/cobertura-de-catedras/ens-6">ENS N° 6 "Vicente López"</a>'
+                 '<a href="/gcaba_historico/cobertura-de-catedras">volver</a>'
+                 '<a href="https://otro.gob.ar/cobertura-de-catedras/x">externo</a>')
+        inst = ('<p><strong>Actualizado: 04/11/2026</strong></p>'
+                '<a href="/sites/default/files/2026-11/PEI-Musica.pdf">PEI CFE - Música en la Educación Inicial</a>'
+                '<p><strong>Actualizado: 01/01/2020</strong></p>'
+                '<a href="/sites/default/files/2020-01/viejo.pdf">Viejo</a>')
+
+        class R:
+            def __init__(self, text, url):
+                self.text, self.url, self.status_code = text, url, 200
+
+        def fake_get(url, **kw):
+            if url.endswith("/gcaba_historico/cobertura-de-catedras"):
+                return R(index, "https://buenosaires.gob.ar/gcaba_historico/cobertura-de-catedras")
+            if url.endswith("/cobertura-de-catedras/ens-6"):
+                return R(inst, url)
+            return None
+
+        page = {"url": "https://buenosaires.gob.ar/gcaba_historico/cobertura-de-catedras",
+                "indice_institutos": True, "jurisdiccion": "CABA"}
+        with mock.patch.object(scrape, "http_get", side_effect=fake_get):
+            got = scrape.scrape_html_page(page, CFG, date(2026, 1, 1))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["fecha"], "2026-11-04")
+        self.assertIn("Vicente", got[0]["instituto"])
+        self.assertEqual(got[0]["titulo"], "PEI CFE - Música en la Educación Inicial")
+
+
 class Pipeline(unittest.TestCase):
     """Corrida completa con red simulada: sitio WordPress + página oficial de CABA."""
 

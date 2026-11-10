@@ -13,8 +13,8 @@
   ],
   "paginas_html": [
     {
-      "url": "https://buenosaires.gob.ar/gcaba_historico/educacion/instituciones-de-formacion-docente-de-la-ciudad",
-      "seguir_enlace_con_texto": "Cobertura de cátedras",
+      "url": "https://buenosaires.gob.ar/gcaba_historico/cobertura-de-catedras",
+      "indice_institutos": true,
       "jurisdiccion": "CABA"
     }
   ],
