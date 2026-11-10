@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import io
 import json
 import re
@@ -61,7 +62,7 @@ def http_get(url: str, timeout: int = TIMEOUT, **kw):
 
 
 def clean_title(raw: str, url: str) -> str:
-    t = re.sub(r"<[^>]+>", "", raw or "").strip()
+    t = html.unescape(re.sub(r"<[^>]+>", "", raw or "")).strip()
     if not t:
         t = unquote(Path(urlparse(url).path).stem)
     t = re.sub(r"[-_]+", " ", t)
@@ -250,7 +251,12 @@ def scrape_site(base: str, jur: str, cfg: dict, cutoff: date) -> tuple[str, list
     raw = site_media(base, prefix, cutoff) if has_api else []
     if not raw:
         raw = site_html_fallback(base, prefix)
-    label = re.sub(r"\s+", " ", name).strip() or urlparse(base).netloc.split(".")[0].upper()
+    label = re.sub(r"\s+", " ", html.unescape(name)).strip()
+    code = urlparse(base).netloc.split(".")[0].split("-")[0].upper()  # ISFD55, ENS4, IES1…
+    if not label:
+        label = code
+    elif not re.search(r"\d", label):
+        label = f"{label} ({code})"
     out = []
     for it in raw:
         if not it["url"].lower().split("?")[0].endswith(".pdf"):

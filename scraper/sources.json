@@ -19,5 +19,5 @@
     }
   ],
   "palabras_incluir": ["convocatoria", "selecci", "llamado", "cobertura", "concurso", "prueba"],
-  "palabras_excluir": ["formulario", "anexo", "reglamento", "diseno", "acta", "orden de merito", "dictamen", "plan de estudio", "calendario", "cronograma", "resultado", "horario"]
+  "palabras_excluir": ["formulario", "anexo", "reglamento", "diseno", "acta", "orden de merito", "dictamen", "plan de estudio", "calendario", "cronograma", "resultado", "horario", "licitaci", "apoyo", "instructivo", "modelo", "guia"]
 }
