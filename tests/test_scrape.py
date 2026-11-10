@@ -47,6 +47,50 @@ class Parsing(unittest.TestCase):
             "https://isfd55-bue.infd.edu.ar/sitio/wp-content/uploads/2026/08/Conv.pdf"), "2026-08-01")
 
 
+class Cargos(unittest.TestCase):
+    def test_cargos(self):
+        txt = ("El ISFD N° 106 convoca a pruebas de selección para la cobertura de cargos de Jefe/a de Área "
+               "de Formación General y Preceptor/a. A la Secretaría de Asuntos Docentes S/D. Director: Pérez")
+        got = scrape.extract_cargos(txt)
+        self.assertIn("Jefe/a de Área", got)
+        self.assertIn("Preceptor/a", got)
+        self.assertNotIn("Secretario/a", got)   # 'Secretaría de Asuntos Docentes' no es un cargo
+        self.assertNotIn("Director/a", got)     # 'Director:' de la comisión, sin 'cargo' cerca
+
+    def test_docente_y_espacios(self):
+        txt = ("Convocatoria: cobertura de módulos y horas cátedra. REF 302 Tramo de Formación Pedagógica 3 hs "
+               "REF 303 Didáctica de la Matemática 4 hs")
+        self.assertIn("Docente (horas cátedra / módulos)", scrape.extract_cargos(txt))
+        self.assertEqual(len(scrape.extract_espacios(txt)), 2)
+        self.assertTrue(scrape.extract_detalle(txt).startswith("módulos y horas cátedra"))
+
+    def test_drive_url(self):
+        self.assertEqual(scrape.drive_download_url("https://drive.google.com/file/d/AbC_1-x/view?usp=sharing"),
+                         "https://drive.google.com/uc?export=download&id=AbC_1-x")
+
+
+class SadPage(unittest.TestCase):
+    def test_tabla_comunicados(self):
+        html_ = """<table>
+        <tr><td>816</td><td>05/11/2026</td><td>Convocatoria ISFT N° 206</td><td><a href="https://drive.google.com/file/d/AAA/view">2026_S2_816</a></td></tr>
+        <tr><td>813</td><td>05/11/2026</td><td>Convocatoria ISFD N° 106</td><td><a href="https://drive.google.com/file/d/BBB/view">2026_S2_813</a></td></tr>
+        <tr><td>809</td><td>03/11/2026</td><td>Convocatoria a Acto Público Cargos Jerárquicos Educación Secundaria Distrito de Morón</td><td><a href="https://drive.google.com/file/d/CCC/view">2026_S2_809</a></td></tr>
+        <tr><td>802</td><td>02/11/2026</td><td>Convocatoria ISFD y T N° 105</td><td><a href="https://drive.google.com/file/d/DDD/view">2026_S2_802</a></td></tr>
+        <tr><td>800</td><td>02/11/2026</td><td>Aviso de mesa de examen ISFD N° 106</td><td><a href="https://drive.google.com/file/d/EEE/view">2026_S2_800</a></td></tr>
+        </table>"""
+
+        class R:
+            text, url, status_code = html_, "https://sadmatanza.com/secretaria2/Comunicados2026.html", 200
+
+        src = {"nombre": "SAD La Matanza", "url": "https://sadmatanza.com/secretaria2/Comunicados{anio}.html"}
+        with mock.patch.object(scrape, "http_get", return_value=R()):
+            got = scrape.scrape_sad_page(src, CFG, date(2026, 1, 1), date(2026, 11, 9))
+        self.assertEqual([g["instituto"] for g in got], ["ISFD N° 106", "ISFDyT N° 105"])
+        self.assertEqual(got[0]["fecha"], "2026-11-05")
+        self.assertEqual(got[0]["titulo"], "Convocatoria ISFD N° 106")
+        self.assertEqual(got[0]["fuente"], "SAD La Matanza")
+
+
 class CabaIndex(unittest.TestCase):
     def test_indice_e_instituto(self):
         index = ('<a href="/educacion/estudiantes/formacion-docente/cobertura-de-catedras/ens-6">ENS N° 6 "Vicente López"</a>'

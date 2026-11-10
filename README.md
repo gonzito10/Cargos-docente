@@ -16,6 +16,10 @@ Desde ahí el workflow corre todos los días, pero solo actualiza cuando pasaron
   (`isfdNN-bue.infd.edu.ar`, `isfdytNN-bue…`, `ensN-caba…`, `iesN-caba…`) y la página oficial de CABA
   ("Cobertura de cátedras"). Detecta PDFs de convocatorias/selecciones y lee su texto para sacar
   profesorado y fecha de cierre.
+- **Secretarías de Asuntos Docentes (SAD)**: para blogs de SAD con tabla de comunicados (ej. La Matanza) se leen
+  solo los que dicen "Convocatoria …" y aluden a un instituto superior. Cada PDF se descarga y se detecta el cargo
+  convocado (jefe/a de área, preceptor/a, bibliotecario/a, docente por horas/módulos, etc.). Para sumar otro
+  distrito, agregá su página en `sad` de `scraper/sources.json` (`{anio}` se reemplaza por el año actual).
 - **Agregar institutos**: editá `scraper/sources.json` (`sitios_extra` o `paginas_html`).
 - **Pruebas**: `python -m unittest discover -s tests`.
 

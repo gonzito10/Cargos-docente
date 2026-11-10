@@ -31,6 +31,11 @@
   .meta { color:var(--mute); font-size:.85rem; display:flex; gap:14px; flex-wrap:wrap; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 0; }
   .chip { font-size:.78rem; border:1px solid var(--line); border-radius:8px; padding:2px 8px; }
+  .cargos { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
+  .cargo { font-size:.82rem; font-weight:650; padding:3px 10px; border-radius:8px; background:var(--acc); color:#fff; }
+  .detalle { font-size:.88rem; color:var(--ink); margin:2px 0 8px; }
+  details { margin-top:8px; font-size:.86rem; } summary { cursor:pointer; color:var(--acc); font-weight:600; }
+  details ul { margin:6px 0 0; padding-left:18px; color:var(--mute); }
   .btn { display:inline-block; margin-top:12px; padding:9px 14px; border-radius:9px; background:var(--acc); color:#fff;
          text-decoration:none; font-weight:600; font-size:.92rem; }
   .empty { text-align:center; color:var(--mute); padding:40px 12px; }
@@ -58,7 +63,7 @@
   <div id="list"></div>
   <footer>
     La información se recolecta automáticamente de las webs de cada instituto y de los sitios oficiales.
-    Las fechas de cierre se detectan leyendo el texto del PDF y pueden ser incorrectas:
+    El cargo y las fechas de cierre se detectan leyendo el texto del PDF y pueden ser incorrectos:
     confirmá siempre en la convocatoria original antes de postularte.
   </footer>
 </main>
@@ -91,20 +96,28 @@ function render() {
     if (est === "abiertas" && e !== "abierta") return false;
     if (jur && it.jurisdiccion !== jur) return false;
     if (inst && it.instituto !== inst) return false;
-    const hay = strip([it.titulo, it.instituto, (it.profesorados||[]).join(" "), it.texto].join(" "));
+    const hay = strip([it.titulo, it.instituto, it.fuente, (it.profesorados||[]).join(" "), (it.cargos||[]).join(" "),
+                       it.detalle, (it.espacios||[]).join(" "), it.texto].join(" "));
     return terms.every(t => hay.includes(t));
   });
   $("count").textContent = rows.length + (rows.length === 1 ? " convocatoria" : " convocatorias");
   $("list").innerHTML = rows.length ? rows.map(it => {
     const e = estado(it), [lbl, cls] = LABEL[e];
     const chips = (it.profesorados || []).map(p => `<span class="chip">${esc(p)}</span>`).join("");
+    const cargos = (it.cargos || []).map(c => `<span class="cargo">${esc(c)}</span>`).join("");
+    const esp = (it.espacios || []).length
+      ? `<details><summary>Espacios / unidades curriculares (${it.espacios.length})</summary><ul>${it.espacios.map(e => `<li>${esc(e)}</li>`).join("")}</ul></details>` : "";
     return `<article class="card">
       <div class="top"><span class="pill ${cls}">${lbl}</span><span class="pill">${esc(it.jurisdiccion)}</span></div>
       <div class="inst">${esc(it.instituto)}</div>
       <div class="title">${esc(it.titulo)}</div>
+      ${cargos ? `<div class="cargos" title="Cargo/s detectado/s en el PDF">${cargos}</div>` : ""}
+      ${it.detalle ? `<div class="detalle">${esc(it.detalle)}</div>` : ""}
       <div class="meta"><span>Publicada: ${fmt(it.fecha)}</span>${it.cierre ? `<span>Cierre: ${fmt(it.cierre)}</span>` : ""}</div>
       ${chips ? `<div class="chips">${chips}</div>` : ""}
-      <a class="btn" href="${esc(it.url)}" target="_blank" rel="noopener">Ver convocatoria (PDF)</a>
+      ${esp}
+      ${it.fuente ? `<div class="meta" style="margin-top:8px"><span>Fuente: ${esc(it.fuente)}</span></div>` : ""}
+      <a class="btn" href="${esc(it.url)}" target="_blank" rel="noopener">Ver convocatoria</a>
     </article>`;
   }).join("") : `<div class="empty">No hay convocatorias con esos filtros.<br>Probá con “Todas” o con otra búsqueda.</div>`;
 }

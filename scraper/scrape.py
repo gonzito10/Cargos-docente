@@ -147,11 +147,76 @@ def extract_profesorados(text: str) -> list[str]:
     return found[:5]
 
 
+# (etiqueta, patrón sobre texto normalizado sin tildes, ¿exige la palabra "cargo" cerca?)
+CARGOS = [
+    ("Jefe/a de Área", r"jef[ae]s?(?:/a)?\s+de\s+area", False),
+    ("Jefe/a de Departamento", r"jef[ae]s?(?:/a)?\s+de\s+departamento", False),
+    ("Vicedirector/a", r"vice-?director", False),
+    ("Director/a", r"(?<!vice)(?<!vice-)director(?:a|es|as)?(?:/a)?\b", True),
+    ("Secretario/a", r"\bsecretari[oa]s?(?:/a)?\b(?!\s+de\s+(?:asuntos|administracion))", True),
+    ("Coordinador/a", r"coordinador(?:a|es|as)?(?:/a)?\b", True),
+    ("Regente", r"\bregente", False),
+    ("Preceptor/a", r"preceptor", False),
+    ("Bibliotecario/a", r"bibliotecari", False),
+    ("Bedel", r"\bbedel", False),
+    ("Encargado/a de Medios de Apoyo (EMATP)", r"encargad[oa]s?\s+de\s+medios|ematp", False),
+    ("Ayudante de Trabajos Prácticos", r"ayudante\s+de\s+trabajos\s+practicos", False),
+    ("Jefe/a de Trabajos Prácticos", r"jef[ae]s?(?:/a)?\s+de\s+trabajos\s+practicos", False),
+    ("Tutor/a", r"\btutor", True),
+    ("Auxiliar", r"\bauxiliar", True),
+]
+DOCENTE_RX = re.compile(r"horas?\s+catedra|modulos?|unidades?\s+curriculares?|espacios?\s+curriculares?|"
+                        r"\bcatedras?\b|asignaturas?|perspectivas?")
+TRIGGER_RX = re.compile(r"convoca|llamado|cobertura|cubrir|vacante|prueba")
+
+
+def extract_cargos(text: str) -> list[str]:
+    """Detecta qué cargos/funciones se convocan. Heurística: revisar siempre el PDF original."""
+    t = norm(text)
+    m = TRIGGER_RX.search(t)
+    start = m.start() if m else 0
+    win = t[start: start + 3000]
+    found: list[str] = []
+    for label, rx, need_cargo in CARGOS:
+        for hit in re.finditer(rx, win):
+            if need_cargo and "cargo" not in win[max(0, hit.start() - 100): hit.start()]:
+                continue
+            found.append(label)
+            break
+    if DOCENTE_RX.search(win):
+        found.append("Docente (horas cátedra / módulos)")
+    return found
+
+
+def extract_detalle(text: str) -> str:
+    m = re.search(r"(?:cobertura|cubrir)\s+(?:de\s+|los\s+siguientes\s+)?(.{20,220}?)(?:\.\s|:|$)",
+                  text, re.I)
+    return re.sub(r"\s+", " ", m.group(1)).strip() if m else ""
+
+
+REF_RX = re.compile(r"REF\.?\s*(?:N[°º]?\s*)?(\d{1,4})\s+(.{5,140}?)(?=\s+REF\.?\s*(?:N[°º]?\s*)?\d{1,4}\s|$)")
+
+
+def extract_espacios(text: str) -> list[str]:
+    out = []
+    for m in REF_RX.finditer(text):
+        item = f"REF {m.group(1)}: {re.sub(chr(32) + '+', ' ', m.group(2)).strip()}"
+        if item not in out:
+            out.append(item)
+    return out[:15]
+
+
+def drive_download_url(url: str) -> str:
+    m = re.search(r"drive\.google\.com/file/d/([\w-]+)", url)
+    return f"https://drive.google.com/uc?export=download&id={m.group(1)}" if m else url
+
+
 def analyze_pdf(url: str, default_year: int) -> dict:
-    out = {"cierre": None, "profesorados": [], "extracto": "", "texto": ""}
+    out = {"cierre": None, "profesorados": [], "cargos": [], "detalle": "", "espacios": [],
+           "extracto": "", "texto": ""}
     if PdfReader is None:
         return out
-    r = http_get(url, timeout=30, stream=True)
+    r = http_get(drive_download_url(url), timeout=30, stream=True)
     if r is None:
         return out
     try:
@@ -160,15 +225,22 @@ def analyze_pdf(url: str, default_year: int) -> dict:
             buf.write(chunk)
             if buf.tell() > MAX_PDF_BYTES:
                 return out
+        if not buf.getvalue().startswith(b"%PDF"):
+            return out  # p. ej. Drive devolvió una página HTML o un .docx
+        buf.seek(0)
         reader = PdfReader(buf)
-        text = " ".join((p.extract_text() or "") for p in reader.pages[:3])
+        text = " ".join((p.extract_text() or "") for p in reader.pages[:6])
     except Exception:
         return out
-    text = re.sub(r"\s+", " ", text).strip()
-    out["texto"] = text[:1200]
-    out["extracto"] = text[:320]
-    out["cierre"] = parse_cierre(text, default_year)
-    out["profesorados"] = extract_profesorados(text)
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    flat = re.sub(r"\s+", " ", text)
+    out["texto"] = flat[:3000]
+    out["extracto"] = flat[:320]
+    out["cierre"] = parse_cierre(flat, default_year)
+    out["profesorados"] = extract_profesorados(flat)
+    out["cargos"] = extract_cargos(flat)
+    out["detalle"] = extract_detalle(flat)
+    out["espacios"] = extract_espacios(flat)
     return out
 
 
@@ -362,6 +434,54 @@ def scrape_html_page(page: dict, cfg: dict, cutoff: date) -> list[dict]:
     return out
 
 
+LINK_RX = re.compile(r"drive\.google\.com/file/d/|docs\.google\.com/|\.pdf(?:$|\?)", re.I)
+FECHA_RX = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+INST_RX = re.compile(r"\b(ISFDyT|ISFD\s*y\s*T|ISFD|ISFT|ISP|IES|ENS)\s*(?:N\s*)?[°º.]?\s*(\d{1,3})\b", re.I)
+
+
+def _norm_inst(kind: str, num: str) -> str:
+    k = re.sub(r"\s+", "", kind).upper().replace("ISFDYT", "ISFDyT")
+    return f"{k} N° {num}"
+
+
+def scrape_sad_page(src: dict, cfg: dict, cutoff: date, today: date) -> list[dict]:
+    """Blog de Secretaría de Asuntos Docentes (tabla de comunicados con enlaces a PDF/Drive).
+    Solo toma comunicados cuya descripción dice 'Convocatoria' y alude a un instituto superior."""
+    years = [today.year] + ([today.year - 1] if today.month <= 2 else [])
+    inc = re.compile(src.get("incluir", cfg["sad_incluir"]), re.I)
+    out, seen = [], set()
+    for y in years:
+        url = src["url"].replace("{anio}", str(y))
+        r = http_get(url, timeout=30)
+        if r is None:
+            continue
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", href=True):
+            href = urljoin(r.url, a["href"])
+            if not LINK_RX.search(href) or href in seen:
+                continue
+            row = a.find_parent(["tr", "li"]) or a.parent
+            full = re.sub(r"\s+", " ", row.get_text(" ", strip=True))
+            fm = FECHA_RX.search(full)
+            desc = full
+            if fm:
+                desc = full.replace(fm.group(0), " ")
+            desc = desc.replace(a.get_text(" ", strip=True), " ")
+            desc = re.sub(r"^\s*\d+\s+", "", re.sub(r"\s+", " ", desc)).strip(" -–")
+            if not re.search(r"\bconvocatoria", norm(desc)) or not inc.search(norm(desc)):
+                continue
+            fecha = _iso(*fm.groups()) if fm else date_from_url(href)
+            if fecha is None or fecha < cutoff.isoformat():
+                continue
+            seen.add(href)
+            im = INST_RX.search(desc)
+            inst = _norm_inst(*im.groups()) if im else desc[:60]
+            out.append({"url": href, "titulo": desc, "instituto": inst,
+                        "jurisdiccion": src.get("jurisdiccion", "PBA"), "fecha": fecha,
+                        "sitio": url, "fuente": src.get("nombre", urlparse(url).netloc)})
+    return out
+
+
 # --------------------------------------------------------------------------- principal
 def load_previous() -> dict:
     try:
@@ -398,6 +518,8 @@ def run(force: bool) -> int:
                 found += res[1]
         for page_items in ex.map(lambda p: scrape_html_page(p, cfg, cutoff), cfg.get("paginas_html", [])):
             found += page_items
+        for sad_items in ex.map(lambda p: scrape_sad_page(p, cfg, cutoff, today), cfg.get("sad", [])):
+            found += sad_items
 
     print(f"Sitios que respondieron: {alive}/{len(sites)} · PDFs candidatos: {len(found)}")
     if alive == 0 and not found:
@@ -413,8 +535,9 @@ def run(force: bool) -> int:
         if fecha < cutoff.isoformat():
             continue
         prior = old.get(it["url"])
-        if prior and "texto" in prior:
-            info = {k: prior.get(k) for k in ("cierre", "profesorados", "extracto", "texto")}
+        if prior and "cargos" in prior:
+            info = {k: prior.get(k) for k in ("cierre", "profesorados", "cargos", "detalle", "espacios",
+                                               "extracto", "texto")}
             first = prior.get("primera_vez", today.isoformat())
         else:
             info = analyze_pdf(it["url"], int(fecha[:4]))
@@ -422,6 +545,7 @@ def run(force: bool) -> int:
         merged[it["url"]] = {
             "id": hashlib.sha1(it["url"].encode()).hexdigest()[:12],
             **{k: it[k] for k in ("url", "titulo", "instituto", "jurisdiccion", "sitio")},
+            "fuente": it.get("fuente", ""),
             "fecha": fecha, **info, "primera_vez": first, "ultima_vez": today.isoformat(),
         }
     # conservar lo que ya teníamos y sigue dentro del plazo (el sitio pudo reordenar/quitar archivos)

@@ -1,15 +1,38 @@
 {
   "dias_minimos_entre_corridas": 3,
   "max_antiguedad_dias": 120,
-  "max_items": 1500,
+  "max_items": 800,
   "sondeo_de_sitios": [
-    {"patron": "https://isfd{n}-bue.infd.edu.ar", "desde": 1, "hasta": 260, "jurisdiccion": "PBA"},
-    {"patron": "https://isfdyt{n}-bue.infd.edu.ar", "desde": 1, "hasta": 260, "jurisdiccion": "PBA"},
-    {"patron": "https://ens{n}-caba.infd.edu.ar", "desde": 1, "hasta": 15, "jurisdiccion": "CABA"},
-    {"patron": "https://ies{n}-caba.infd.edu.ar", "desde": 1, "hasta": 5, "jurisdiccion": "CABA"}
+    {
+      "patron": "https://isfd{n}-bue.infd.edu.ar",
+      "desde": 1,
+      "hasta": 260,
+      "jurisdiccion": "PBA"
+    },
+    {
+      "patron": "https://isfdyt{n}-bue.infd.edu.ar",
+      "desde": 1,
+      "hasta": 260,
+      "jurisdiccion": "PBA"
+    },
+    {
+      "patron": "https://ens{n}-caba.infd.edu.ar",
+      "desde": 1,
+      "hasta": 15,
+      "jurisdiccion": "CABA"
+    },
+    {
+      "patron": "https://ies{n}-caba.infd.edu.ar",
+      "desde": 1,
+      "hasta": 5,
+      "jurisdiccion": "CABA"
+    }
   ],
   "sitios_extra": [
-    {"url": "https://isp-caba.infd.edu.ar", "jurisdiccion": "CABA"}
+    {
+      "url": "https://isp-caba.infd.edu.ar",
+      "jurisdiccion": "CABA"
+    }
   ],
   "paginas_html": [
     {
@@ -18,6 +41,39 @@
       "jurisdiccion": "CABA"
     }
   ],
-  "palabras_incluir": ["convocatoria", "selecci", "llamado", "cobertura", "concurso", "prueba"],
-  "palabras_excluir": ["formulario", "anexo", "reglamento", "diseno", "acta", "orden de merito", "dictamen", "plan de estudio", "calendario", "cronograma", "resultado", "horario", "licitaci", "apoyo", "instructivo", "modelo", "guia"]
+  "palabras_incluir": [
+    "convocatoria",
+    "selecci",
+    "llamado",
+    "cobertura",
+    "concurso",
+    "prueba"
+  ],
+  "palabras_excluir": [
+    "formulario",
+    "anexo",
+    "reglamento",
+    "diseno",
+    "acta",
+    "orden de merito",
+    "dictamen",
+    "plan de estudio",
+    "calendario",
+    "cronograma",
+    "resultado",
+    "horario",
+    "licitaci",
+    "apoyo",
+    "instructivo",
+    "modelo",
+    "guia"
+  ],
+  "sad": [
+    {
+      "nombre": "SAD La Matanza (Secretaría 2)",
+      "url": "https://sadmatanza.com/secretaria2/Comunicados{anio}.html",
+      "jurisdiccion": "PBA"
+    }
+  ],
+  "sad_incluir": "isfd|isfdyt|isfd y t|\\bisp\\b|\\bies\\b|\\bens\\b|instituto superior de formacion docente|profesorado|formacion docente"
 }
